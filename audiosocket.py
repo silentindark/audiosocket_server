@@ -1,5 +1,3 @@
-#!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3
-
 # Standard Python modules
 import socket
 from threading import Thread
