@@ -20,7 +20,7 @@ raw audio stream of calls from Asterisk. A few oddities exist with how it works 
 *What does this allow me to do?*
 
 AudioSocket, whether used as a channel driver or Dialplan application, behaves the same and has the primary purpose of
-letting us access an Asterisk channel's incoming and outgoing audio stream and use it in externally for whatever, though unless attached via ChanSpy, it cannot be used to passively 'intercept' audio on a channel (it blocks execution in the Dialplan whenever its called).
+letting us access an Asterisk channel's incoming and outgoing audio stream and use it in externally for whatever. Though unless attached via ChanSpy, it cannot be used to passively 'intercept' audio on a channel (it blocks execution in the Dialplan whenever its called).
 
 You can also use it to trigger a hangup on the channel from within your program (by calling the `.hangup` method on the audiosocket object), that's about it signaling wise, but is really all you need.
 
@@ -75,7 +75,7 @@ I don't know C and I haven't looked through the of the application itself, so I'
 When AudioSocket is used like a channel driver, for example `Dial(AudioSocket/<uuid>/127.0.0.1:3278)`, CPU usage remains perfectly normal, but... depending on what the AudioSocket is going to bridged with (for example, a softphone connected via SIP), the audio sent to your server will no longer be in
 16-bit, 8KHz, mono LE PCM format.
 
-**Instead...* It will be encoded and sent as whatever audio codec was agreed upon between the two channels. So in my experience, when a SIP softphone that uses the u-law (G.711) codec makes a call to a place in the Dialplan
+*Instead...* It will be encoded and sent as whatever audio codec was agreed upon between the two channels. So in my experience, when a SIP softphone that uses the u-law (G.711) codec makes a call to a place in the Dialplan
 that eventually calls AudioSocket, the audio you will be sent will also be in encoded as u-law, which can be both a positive and negative. Due to Asterisk's ability to handle a
 wide range codecs and transcode between them though, I assume there is probably a way around this by manually setting the codec to use within the Dialplan, right before AudioSocket() is called, but I haven't experimented with that yet.
 
@@ -91,4 +91,4 @@ Throughout the course of trying to use this initially myself, some certain aspec
 
 AudioSocket sends it's audio data in chunks of 320 bytes, which represents 20ms of 16-bit 8KHZ mono PCM (this is what you will receive when doing this: `audio_data = audiosocket.read()`), and that's also
 what it needs to receive back from you when sending audio. Anymore or less will result in distorted audio. Thankfully 20ms seems to be a common length of audio to provide within the world of APIs and probably programming in general (I'm sure there's an explanation of this somewhere). So all you
-should have to do to prepare your audio source sending to AudioSocket, is to downsample it to the required 8KHz mono.
+should have to do to prepare your audio source before sending to AudioSocket, is to downsample it to the required 8KHz mono.
