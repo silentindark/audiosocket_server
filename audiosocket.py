@@ -107,12 +107,13 @@ class new_audiosocket(Thread):
       'the minimum length data from Asterisk AudioSocket should be.')
       return
     else:
-           # type      length                          payload
-      return data[:1], self.convert_length(data[1:3]), data[3:]
+           # type      length (convert to an int)        payload
+      return data[:1], int.from_bytes(data[1:3], 'big'), data[3:]
 
 
   # Turns the two bytes from the length header back into the
-  # 16-bit BE unsigned integer they represent
+  # 16-bit BE unsigned integer they represent.
+  # This is now performed when returing the data above
   def convert_length(self, length):
     return int.from_bytes(length, 'big', signed=False)
 
@@ -157,7 +158,7 @@ class new_audiosocket(Thread):
   # by the original protocol definition, but this is a bit cleaner
   def hangup(self):
     print('[AUDIOSOCKET NOTICE] Sending hangup request to Asterisk')
-    self.conn.send(types.hangup + b'\x00\x00')
+    self.tx_audio_q.put(types.hangup + b'\x00\x00')
     return
 
 
