@@ -22,7 +22,7 @@ raw audio stream of calls from Asterisk. A few oddities exist with how it works 
 AudioSocket, whether used as a channel driver or Dialplan application, behaves the same and has the primary purpose of
 letting us access an Asterisk channel's incoming and outgoing audio stream and use it in externally for whatever. Though unless attached via ChanSpy, it cannot be used to passively 'intercept' audio on a channel (it blocks execution in the Dialplan whenever its called).
 
-You can also use it to trigger a hangup on the channel from within your program (by calling the `.hangup` method on the audiosocket object), that's about it signaling wise, but is really all you need.
+You can also use it to trigger a hangup on the channel from within your program (by calling the audiosocket object's `.hangup()` method), that's about it signaling wise, but is really all you need.
 
 
 ### Server usage
@@ -50,11 +50,15 @@ Internally, FIFO queue objects are used to send/receive audio, but to make usage
 If you wanted to pass in your own though, you can do so like this:
 
 ```python
-audiosocket = new_audiosocket(rx_audio_q = Queue(), tx_audio_q = Queue())
+receive_q = queue.Queue()
+send_q = queue.Queue()
+
+audiosocket = new_audiosocket(rx_audio_q = receive_q, tx_audio_q = send_q)
 audiosocket.start()
 ```
+You could then use the `.get()` method of the receiveing queue and the `.put(<data>)` method of the sending queue to receive and transmit audio without using the `.read()` and `.write(<data>)` methods of the audiosocket object.
 
-Sending/receiving audio using the provided `read()` and `write()` methods is intended to be done in a `while` loop as long as `audiosocket.connected` is true. That loop should also send/receive audio to/from another source, for example
+Sending/receiving audio using the provided `read()` and `write()` methods is intended to be done in a `while` loop for as long as `audiosocket.connected` is True. That loop should also send/receive audio to/from another source, for example
 you could use [sounddevice](https://github.com/spatialaudio/python-sounddevice) to play audio from AudioSocket to your speakers and send audio from your microphone to AudioSocket, sorta creating a simple softphone.
 
 In the [example](https://github.com/NormHarrison/audiosocket_server/blob/master/example_application.py) usage here, audio is simply read from audiosocket, and then sent back to it, creating an echo on the connected channel.

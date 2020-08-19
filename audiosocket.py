@@ -3,6 +3,7 @@ import socket
 from threading import Thread
 from collections import namedtuple
 from queue import Queue, Empty
+from time import sleep
 
 
 # A sort of imitation struct that holds all of the possible
@@ -139,9 +140,9 @@ class new_audiosocket(Thread):
   # Gets AudioSocket audio from the rx queue
   def read(self):
     try:
-      return self.rx_audio_q.get(timeout=0.5)
+      return self.rx_audio_q.get(timeout=0.2)
     except Empty:
-      return
+      return b'\x00'
 
 
   # Puts user supplied audio into the tx queue
@@ -153,13 +154,30 @@ class new_audiosocket(Thread):
 
 
 
-  # Tells Asterisk to hangup the call from its end.
-  # Closing the self.conn socket works too, as indicated
-  # by the original protocol definition, but this is a bit cleaner
+  # Tells Asterisk to hangup the call from it's end.
+  # Although after the call is hungup, the socket on Asterisk's end
+  # closes the connection via an abrupt RST packet, resulting in a "Connection reset by peer"
+  # error on our end. Unfortunately, using try and except around self.conn.recv() is as 
+  # clean as I think it can be right now
   def hangup(self):
     print('[AUDIOSOCKET NOTICE] Sending hangup request to Asterisk')
-    self.tx_audio_q.put(types.hangup + b'\x00\x00')
+    # Three bytes of 0 indicate a hangup message
+    self.conn.send(types.hangup * 3)
+    sleep(0.2)
     return
+
+
+
+  def cleanup(self):
+    self.connected = False
+    print('[AUDIOSOCKET NOTICE] Ended connection with {0}'.format(self.peer_addr))
+    print('[AUDIOSOCKET NOTICE] The call\'s UUID was: {0}'.format(self.uuid))
+
+    if self.conn:
+      self.conn.close()
+
+    return
+
 
 
   # When the start() method of the audiosocket object is called
@@ -168,27 +186,28 @@ class new_audiosocket(Thread):
     try:
       self.conn, self.peer_addr = self.initial_sock.accept()
       self.connected = True
-      print('[AUDIOSOCKET NOTICE] AudioSocket server received a connection from {0}'.format(self.peer_addr))
+      print('[AUDIOSOCKET NOTICE] Server received a connection from {0}'.format(self.peer_addr))
     except socket.timeout:
       self.connected = False
-      print('[AUDIOSOCKET ERROR] AudioSocket server didn\'t receive a connection ' + \
-      'Asterisk after {0} seconds, closing...'.format(self.timeout))
-      self.initial_sock.shutdown(socket.SHUT_RDWR)
+      print('[AUDIOSOCKET ERROR] Server didn\'t receive a connection after ' + \
+      '{0} seconds, closing...'.format(self.timeout))
       self.initial_sock.close()
       return
 
 
     # The main audio receiving/sending loop, this continues
-    # until AudioSocket stops sending us data (which can be
-    # triggered from the users end by calling the hangup() method)
+    # until AudioSocket stops sending us data, or an error occurs.
+    # A disconnection can be triggered from the users end by calling the hangup() method
     while True:
-      data = self.conn.recv(323)
+
+      try:
+        data = self.conn.recv(323)
+      except ConnectionResetError:
+        self.cleanup()
+        return
+
       if not data:
-        self.connected = False
-        print('[AUDIOSOCKET NOTICE] AudioSocket connection with {0} ended'.format(self.peer_addr))
-        print('[AUDIOSOCKET NOTICE] Call UUID was: {0}'.format(self.uuid))
-        #self.conn.shutdown(socket.SHUT_RDWR)
-        self.conn.close()
+        self.cleanup()
         return
 
       type, length, payload = self.split_data(data)
@@ -202,7 +221,7 @@ class new_audiosocket(Thread):
       elif type == types.audio:
         # Adds received audio into the rx queue
         if self.rx_audio_q.full():
-          pass
+          print('[AUDIOSOCKET WARNING] The inbound audio queue is full! Skipping frame')
         else:
           self.rx_audio_q.put(payload)
 
