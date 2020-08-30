@@ -22,7 +22,7 @@ raw audio stream of calls from Asterisk. A few oddities exist with how it works 
 AudioSocket, whether used as a channel driver or Dialplan application, behaves the same and has the primary purpose of
 letting us access an Asterisk channel's incoming and outgoing audio stream and use it in externally for whatever. Though unless attached via ChanSpy, it cannot be used to passively 'intercept' audio on a channel (it blocks execution in the Dialplan whenever its called).
 
-You can also use it to trigger a hangup on the channel from within your program (by calling the audiosocket object's `.hangup()` method), that's about it signaling wise, but is really all you need.
+You can also use it to trigger a hangup on the channel from within your program (by calling the audiosocket object's `hangup()` method), that's about it signaling wise, but is really all you need.
 
 
 ### Server usage
@@ -36,8 +36,8 @@ audiosocket = new_audiosocket()
 audiosocket.start()
 ```
 
-This would create a new audiosocket object in a separate thread, bind it to network interfaces 
-on the computer using an open port (accessible via `audiosocket.port`) an start listening for incoming connections indefinitely.
+This would create a new audiosocket object in a separate thread, bind it to all network interfaces 
+on the computer using an open port the OS chose (accessible via `audiosocket.port`) an start listening for incoming connections indefinitely.
 
 If you wanted to bind it to a specific address and/or port only and set a timeout on the listening time, you could do this:
 
@@ -50,13 +50,13 @@ Internally, FIFO queue objects are used to send/receive audio, but to make usage
 If you wanted to pass in your own though, you can do so like this:
 
 ```python
-receive_q = queue.Queue()
-send_q = queue.Queue()
+custom_receive_q = queue.Queue()
+custom_send_q = queue.Queue()
 
-audiosocket = new_audiosocket(rx_audio_q = receive_q, tx_audio_q = send_q)
+audiosocket = new_audiosocket(rx_audio_q=custom_receive_q, tx_audio_q=custom_send_q)
 audiosocket.start()
 ```
-You could then use the `.get()` method of the receiveing queue and the `.put(<data>)` method of the sending queue to receive and transmit audio without using the `.read()` and `.write(<data>)` methods of the audiosocket object.
+You could then use the `get()` method of the receiveing queue and the `put(<data>)` method of the sending queue to receive and transmit audio without using the `read()` and `write(<data>)` methods of the audiosocket object.
 
 Sending/receiving audio using the provided `read()` and `write()` methods is intended to be done in a `while` loop for as long as `audiosocket.connected` is True. That loop should also send/receive audio to/from another source, for example
 you could use [sounddevice](https://github.com/spatialaudio/python-sounddevice) to play audio from AudioSocket to your speakers and send audio from your microphone to AudioSocket, sorta creating a simple softphone.
@@ -83,11 +83,37 @@ When AudioSocket is used like a channel driver, for example `Dial(AudioSocket/<u
 that eventually calls AudioSocket, the audio you will be sent will also be in encoded as u-law, which can be both a positive and negative. Due to Asterisk's ability to handle a
 wide range codecs and transcode between them though, I assume there is probably a way around this by manually setting the codec to use within the Dialplan, right before AudioSocket() is called, but I haven't experimented with that yet.
 
-Now with sending audio back to AudioSocket. Even though AudioSocket will send you audio in a different codec, **it still wants to receive
+Now with sending audio back to AudioSocket. Even though AudioSocket will send you audio in a different codec when brided with certain channels, **it still wants to receive
 16-bit, 8KHz, mono LE PCM** when you send audio back to it.
 
 For me, this was a very difficult thing to deal with initially, until I found that an execellent built-in Python module exists, called [audioop](https://docs.python.org/3/library/audioop.html), for handing raw PCM in many different ways
 (resampling it, converting between mono and stereo, converting to/from u-LAW). I strongly recommend using this to prepare your audio source for AudioSocket whenever it's not already in telephone-quality audio, which is probably almost always.
+
+Certain methods of audioop are now provided within the audiosocket object itself, so if you wanted, you could resample/remix input or output audio like this:
+
+```python
+# Creation of a new audiosocket object is still done as normal
+audiosocket = new_audiosocket(addr='10.0.0.5', port=3278, timeout=30)
+
+
+# But now, before calling start(), you can choose to have the server prepare
+# the audio being sent, received, or both by calling these methods and providing correct arguments
+
+# Keep in mind that inrate and channels must match the sample
+# rate and number of channels of the audio data your writing.
+# By default, CD quality audio is assumed (44000Hz, 16-bit stereo linear PCM), but you can change this to accept whatever values audioop's ratecv() method supports
+audiosocket.prepare_input(inrate=48000, channels=2)
+
+
+# For recieved audio, outrate and channels specifiy how you want the server to prepare audio before
+# returning it to you via the read() method. The argument ulaw2lin is also available, this will convert audio data received in ULAW encoding from Asterisk
+# to 8Khz, 16-bit mono linear PCM (which you can then upsample too if needed). This is very useful for when AudioSocket is bridged with SIP or IAX channels (which still commonly use ULAW encoding)
+audiosocket.prepare_output(outrate=44000, channels=2, ulaw2lin=True)
+
+# Finally, you would then use the start() method as normal
+audiosocket.start()
+```
+Please keep in mind that (for now) these integrated audioop methods only work when using the built-in `read()` and `write()` methods (not when sending/receiving audio via queue objects you created).
 
 ### Final notes
 

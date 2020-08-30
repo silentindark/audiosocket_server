@@ -1,5 +1,6 @@
 # Standard Python modules
 import socket
+import audioop
 from threading import Thread
 from collections import namedtuple
 from queue import Queue, Empty
@@ -89,16 +90,51 @@ class new_audiosocket(Thread):
     self.uuid = None
     self.connected = False
 
+    # By default, features of audioop (for example: resampling
+    # or re-mixng input/output) are disabled
+    self.audioop = None
+    self.prepare_input_enabled = False
+    self.prepare_output_enabled = False
+
     # Create the initial socket that will accept an incoming connection from AudioSocket
     self.initial_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     self.initial_sock.bind((self.addr, self.port))
     self.initial_sock.settimeout(self.timeout)
-    self.initial_sock.listen(1)
+    self.initial_sock.listen(3)
 
     # If the user didn't specify a port, the one that the operating system
     # chose is availble in this attribute
     self.port = self.initial_sock.getsockname()[1]
     print('[AUDIOSOCKET NOTICE] Listening for connection from AudioSocket on port {0}'.format(self.port))
+
+
+  # Optionally prepares audio sent by the user to
+  # the format needed by audiosocket (16-bit, 8KHz mono LE PCM).
+  # Audio sent in must be in PCM or ULAW format
+  def prepare_input(self, inrate=44000, channels=2, ulaw2lin=False):
+    self.prepare_input_enabled = True
+
+    if not self.audioop:
+      self.audioop = audioop
+
+    self.in_ratecv_state = None
+    self.inrate = inrate
+    self.in_channels = channels
+    self.in_ulaw2lin = ulaw2lin
+
+
+  # Optionally prepares audio sent by audiosocket to
+  # the format that the user specified
+  def prepare_output(self, outrate=44000, channels=2, ulaw2lin=False):
+    self.prepare_output_enabled = True
+
+    if not self.audioop:
+      self.audioop = audioop
+
+    self.out_ratecv_state = None
+    self.outrate = outrate
+    self.out_channels = channels
+    self.out_ulaw2lin = ulaw2lin
 
 
   # Splits data sent by AudioSocket into three different peices
@@ -140,17 +176,62 @@ class new_audiosocket(Thread):
   # Gets AudioSocket audio from the rx queue
   def read(self):
     try:
-      return self.rx_audio_q.get(timeout=0.2)
+      audio = self.rx_audio_q.get(timeout=0.2)
+
+      if self.prepare_output_enabled:
+        # If AudioSocket is bridged with a channel
+        # using the ULAW audio codec, the user can specify
+        # to have it converted to linear encoding  upon reading.
+        if self.out_ulaw2lin:
+          audio = self.audioop.ulaw2lin(audio, 2)
+
+        # If the user requested an outrate different
+        # from the default, then resample it to the rate they specified
+        if self.outrate != 8000:
+          audio, self.out_ratecv_state = self.audioop.ratecv(audio, 2, 1, 8000,
+          self.outrate, self.out_ratecv_state)
+
+        # If the user requested the output be in stereo,
+        # then convert it from mono
+        if self.out_channels == 2:
+          audio = self.audioop.tostereo(audio, 2, 1, 1)
+
+      return audio
+
     except Empty:
-      return b'\x00'
+      print('[AUDIOSOCKET WARNING] The inbound audio queue is empty! ' + \
+      'Nothing to read, returning silence')
+      return byte(320)
+
 
 
   # Puts user supplied audio into the tx queue
   def write(self, audio):
-    if not self.tx_audio_q.full():
-      self.tx_audio_q.put(audio)
+    if self.tx_audio_q.full():
+      print('[AUDIOSOCKET WARNING] The outbound audio queue is full!' Skipping frame write)
+      return
 
-    return
+    if self.prepare_input_enabled:
+      # The user can also specify to have ULAW encoded source audio
+      # converted to linear encoding upon being written.
+      if self.in_ulaw2lin:
+        # Possibly skip downsampling if this was triggered, as
+        # while ULAW encoded audio can be sampled at rates other
+        # than 8KHz, since this is telephony related, it's unlikely.
+        audio = self.audioop.ulaw2lin(audio, 2)
+
+      # If the audio isn't already sampled at 8KHz,
+      # then it needs to be downsampled first
+      if self.inrate != 8000:
+        audio, self.in_ratecv_state = self.audioop.ratecv(audio, 2,
+        self.in_channels, self.inrate, 8000, self.in_ratecv_state)
+
+      # If the audio isn't already in mono, then
+      # it needs to be downmixed as well
+      if self.in_channels == 2:
+        audio = self.audioop.tomono(audio, 2, 1, 1)
+
+    self.tx_audio_q.put(audio)
 
 
 
@@ -221,7 +302,8 @@ class new_audiosocket(Thread):
       elif type == types.audio:
         # Adds received audio into the rx queue
         if self.rx_audio_q.full():
-          print('[AUDIOSOCKET WARNING] The inbound audio queue is full! Skipping frame')
+          print('[AUDIOSOCKET WARNING] The inbound audio queue is full! This most ' + \
+          'likely occurred because the read() method is not being called, skipping frame')
         else:
           self.rx_audio_q.put(payload)
 
