@@ -89,28 +89,33 @@ Now with sending audio back to AudioSocket. Even though AudioSocket will send yo
 For me, this was a very difficult thing to deal with initially, until I found that an execellent built-in Python module exists, called [audioop](https://docs.python.org/3/library/audioop.html), for handing raw PCM in many different ways
 (resampling it, converting between mono and stereo, converting to/from u-LAW). I strongly recommend using this to prepare your audio source for AudioSocket whenever it's not already in telephone-quality audio, which is probably almost always.
 
+## Integrated [audioop](https://docs.python.org/3/library/audioop.html) features
+
 Certain methods of audioop are now provided within the audiosocket object itself, so if you wanted, you could resample/remix input or output audio like this:
 
+
+Creation of a new audiosocket object is still done as normal
 ```python
-# Creation of a new audiosocket object is still done as normal
 audiosocket = new_audiosocket(addr='10.0.0.5', port=3278, timeout=30)
+```
 
+But now, before calling start(), you can choose to have the server prepare the audio being sent, received, or both by calling these methods and providing correct arguments.
 
-# But now, before calling start(), you can choose to have the server prepare
-# the audio being sent, received, or both by calling these methods and providing correct arguments
-
-# Keep in mind that inrate and channels must match the sample
-# rate and number of channels of the audio data your writing.
-# By default, CD quality audio is assumed (44000Hz, 16-bit stereo linear PCM), but you can change this to accept whatever values audioop's ratecv() method supports
+Keep in mind that inrate and channels must match the sample rate and number of channels of the audio data your writing.
+By default, CD quality audio is assumed (44000Hz, 16-bit stereo linear PCM), but you can change this to accept whatever values audioop's ratecv() method supports.
+```python
 audiosocket.prepare_input(inrate=48000, channels=2)
+```
 
-
-# For recieved audio, outrate and channels specifiy how you want the server to prepare audio before
-# returning it to you via the read() method. The argument ulaw2lin is also available, this will convert audio data received in ULAW encoding from Asterisk
-# to 8Khz, 16-bit mono linear PCM (which you can then upsample too if needed). This is very useful for when AudioSocket is bridged with SIP or IAX channels (which still commonly use ULAW encoding)
+For recieved audio, outrate and channels specifiy how you want the server to prepare audio before
+returning it to you via the read() method. The argument ulaw2lin is also available, this will convert audio data received in ULAW encoding from Asterisk
+to 8Khz, 16-bit mono linear PCM (which you can then upsample too if needed). This is very useful for when AudioSocket is bridged with SIP or IAX channels (which still commonly use ULAW encoding)
+```python
 audiosocket.prepare_output(outrate=44000, channels=2, ulaw2lin=True)
+```
 
-# Finally, you would then use the start() method as normal
+Finally, you would then use the start() method as normal.
+```python
 audiosocket.start()
 ```
 Please keep in mind that (for now) these integrated audioop methods only work when using the built-in `read()` and `write()` methods (not when sending/receiving audio via queue objects you created).
