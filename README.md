@@ -89,7 +89,7 @@ Now with sending audio back to AudioSocket. Even though AudioSocket will send yo
 For me, this was a very difficult thing to deal with initially, until I found that an execellent built-in Python module exists, called [audioop](https://docs.python.org/3/library/audioop.html), for handing raw PCM in many different ways
 (resampling it, converting between mono and stereo, converting to/from u-LAW). I strongly recommend using this to prepare your audio source for AudioSocket whenever it's not already in telephone-quality audio, which is probably almost always.
 
-## Integrated [audioop](https://docs.python.org/3/library/audioop.html) features
+### Integrated [audioop](https://docs.python.org/3/library/audioop.html) features
 
 Certain methods of audioop are now provided within the audiosocket object itself, so if you wanted, you could resample/remix input or output audio like this:
 
