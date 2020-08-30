@@ -99,22 +99,26 @@ Creation of a new audiosocket object is still done as normal
 audiosocket = new_audiosocket(addr='10.0.0.5', port=3278, timeout=30)
 ```
 
-But now, before calling start(), you can choose to have the server prepare the audio being sent, received, or both by calling these methods and providing correct arguments.
+But now, before calling start(), you can choose to have the server prepare the audio being sent, received, or both by calling these methods and providing correct arguments:
+```python
+audiosocket.prepare_input()
+audiosocket.prepare_output()
+```
 
 Keep in mind that inrate and channels must match the sample rate and number of channels of the audio data your writing.
-By default, CD quality audio is assumed (44000Hz, 16-bit stereo linear PCM), but you can change this to accept whatever values audioop's ratecv() method supports.
+By default, CD quality audio is assumed (44000Hz, 16-bit stereo linear PCM), but you can change this to accept whatever values audioop's ratecv() method supports:
 ```python
 audiosocket.prepare_input(inrate=48000, channels=2)
 ```
 
 For recieved audio, outrate and channels specifiy how you want the server to prepare audio before
 returning it to you via the read() method. The argument ulaw2lin is also available, this will convert audio data received in ULAW encoding from Asterisk
-to 8Khz, 16-bit mono linear PCM (which you can then upsample too if needed). This is very useful for when AudioSocket is bridged with SIP or IAX channels (which still commonly use ULAW encoding)
+to 8Khz, 16-bit mono linear PCM (which you can then upsample too if needed). This is very useful for when AudioSocket is bridged with SIP or IAX channels (which still commonly use ULAW encoding):
 ```python
 audiosocket.prepare_output(outrate=44000, channels=2, ulaw2lin=True)
 ```
 
-Finally, you would then use the start() method as normal.
+Finally, you would then use the start() method as normal:
 ```python
 audiosocket.start()
 ```
