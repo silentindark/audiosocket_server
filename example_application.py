@@ -7,7 +7,7 @@ from audiosocket import new_audiosocket
 
 # Create a new audiosocket instance and start listening
 # for incoming connections on the provided address and port
-audiosocket = new_audiosocket(addr='127.0.01', port=3278)
+audiosocket = new_audiosocket(addr='127.0.0.1', port=3278)
 audiosocket.start()
 
 
