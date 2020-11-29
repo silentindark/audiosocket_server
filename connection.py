@@ -104,6 +104,13 @@ class Connection:
     try:
       audio = self._rx_q.get(timeout=0.2)
 
+      # If for some reason we receive less than 320 bytes
+      # of audio, add silence (padding) to the end. This prevents
+      # audioop related errors that are caused by the current frame
+      # not being the same size as the last
+      if len(audio) != 320:
+        audio += bytes(320 - len(audio))
+
     except Empty:
       return bytes(320)
 
@@ -111,25 +118,25 @@ class Connection:
       # If AudioSocket is bridged with a channel
       # using the ULAW audio codec, the user can specify
       # to have it converted to linear encoding upon reading.
-      if self.asterisk_resample.ulaw2lin:
-        audio = self.audioop.ulaw2lin(audio, 2)
+      if self._asterisk_resample.ulaw2lin:
+        audio = audioop.ulaw2lin(audio, 2)
 
       # If the user requested an outrate different
       # from the default, then resample it to the rate they specified
-      if self.asterisk_resample.rate != 8000:
-        audio, self.asterisk_resample.ratecv_state = self.audioop.ratecv(
+      if self._asterisk_resample.rate != 8000:
+        audio, self._asterisk_resample.ratecv_state = audioop.ratecv(
           audio,
           2,
           1,
           8000,
-          self.asterisk_resample.rate,
-          self.asterisK_resample.ratecv_state,
+          self._asterisk_resample.rate,
+          self._asterisk_resample.ratecv_state,
         )
 
       # If the user requested the output be in stereo,
       # then convert it from mono
-      if self.asterisk_resample.channels == 2:
-        audio = self.audioop.tostereo(audio, 2, 1, 1)
+      if self._asterisk_resample.channels == 2:
+        audio = audioop.tostereo(audio, 2, 1, 1)
 
     return audio
 
@@ -141,28 +148,28 @@ class Connection:
     if self._user_resample:
       # The user can also specify to have ULAW encoded source audio
       # converted to linear encoding upon being written.
-      if self.user_resample.ulaw2lin:
+      if self._user_resample.ulaw2lin:
         # Possibly skip downsampling if this was triggered, as
         # while ULAW encoded audio can be sampled at rates other
         # than 8KHz, since this is telephony related, it's unlikely.
-        audio = self.audioop.ulaw2lin(audio, 2)
+        audio = audioop.ulaw2lin(audio, 2)
 
       # If the audio isn't already sampled at 8KHz,
       # then it needs to be downsampled first
-      if self.user_resample.rate != 8000:
-        audio, self.user_resample.ratecv_state = self.audioop.ratecv(
+      if self._user_resample.rate != 8000:
+        audio, self._user_resample.ratecv_state = audioop.ratecv(
           audio,
           2,
-          self.user_resample.channels,
-          self.user_resample.rate,
+          self._user_resample.channels,
+          self._user_resample.rate,
           8000,
-          self.user_resample.ratecv_state,
+          self._user_resample.ratecv_state,
         )
 
       # If the audio isn't already in mono, then
       # it needs to be downmixed as well
-      if self.user_resample.channels == 2:
-        audio = self.audioop.tomono(audio, 2, 1, 1)
+      if self._user_resample.channels == 2:
+        audio = audioop.tomono(audio, 2, 1, 1)
 
     self._tx_q.put(audio)
 

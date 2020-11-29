@@ -56,6 +56,7 @@ class Audiosocket:
       rate = inrate,
       channels = channels,
       ulaw2lin = ulaw2lin,
+      ratecv_state = None,
     )
 
 
@@ -67,20 +68,19 @@ class Audiosocket:
       rate = outrate,
       channels = channels,
       ulaw2lin = ulaw2lin,
+      ratecv_state = None,
     )
 
 
 
   def listen(self):
 
-    print('[AUDIOSOCKET NOTICE] Listening for connection from AudioSocket on port {0}'.format(self.port))
-
     conn, peer_addr = self.initial_sock.accept()
     connection = Connection(
       conn,
       peer_addr,
       self.user_resample,
-      self.asterisk_resample
+      self.asterisk_resample,
     )
 
     connection_thread = Thread(target=connection._process, args=())
